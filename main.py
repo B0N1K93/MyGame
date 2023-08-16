@@ -7,7 +7,7 @@ import time
 import math
 
 import pygame
-from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_p, K_ESCAPE
+from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_p, K_ESCAPE, K_SPACE
 
 pygame.init()
 
@@ -34,12 +34,16 @@ bg_move = 3
 score = 0
 level = 1
 lives = 3
+ticks_to_ignore = 0
+ticks_to_ignore_pause = 0
+jumps : int
 enemy_count : int
 enemy_collisions : int
 bonus_count : int
 bonus_collected : int
 max_score : int
 extra_lives : int
+extra_jumps : int
 
 paused = False
 game_end = False
@@ -401,13 +405,16 @@ def game_intro():
         pygame.display.update()
 
 def unpause():
-    global paused
+    global paused, ticks_to_ignore_pause
     pygame.mixer.music.unpause()
+    ticks_to_ignore_pause = 75
     paused = False
 
 def pause():
     global paused, score, lives, difficulty
 
+    ticks_to_ignore_p = 300
+    
     pygame.mixer.music.pause()
 
     message_display('Пауза!')
@@ -431,11 +438,19 @@ def pause():
         button('Продовжити :)', 'left', unpause)
         button('Нова гра!', 'center', choose_difficulty)
         button('Вийти :(', 'right', game_exit)
+
+        keys = pygame.key.get_pressed()
+
+        if keys[K_ESCAPE] or (keys[K_p] and ticks_to_ignore_p == 0):
+            unpause()
+
+        if ticks_to_ignore_p > 0:
+            ticks_to_ignore_p -= 1
              
         pygame.display.update()
 
 def game_loop():
-    global paused, bg_move, score, level, difficulty, lives, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives
+    global paused, bg_move, score, level, difficulty, lives, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives, ticks_to_ignore, jumps, extra_jumps, ticks_to_ignore_pause
 
     pygame.mixer.music.load('Village of fools soundtrack.wav')
     pygame.mixer.music.play(-1)
@@ -457,10 +472,16 @@ def game_loop():
     match difficulty:
         case 'easy':
             time_correction = 0
+            jump = 0
+            jumps = 3
         case 'normal':
             time_correction = 250
+            jump = 0.5
+            jumps = 2
         case 'hard':
             time_correction = 500
+            jump = 1
+            jumps = 1
 
     CREATE_ENEMY = pygame.USEREVENT + 1
     pygame.time.set_timer(CREATE_ENEMY, 1500 - time_correction)
@@ -479,13 +500,17 @@ def game_loop():
     level = 1
     score_lives = 0
     score_for_lives = 100
+    score_jumps = 0
+    score_for_jumps = 50
     enemy_count = 0
     enemy_collisions = 0
     bonus_count = 0
     bonus_collected = 0
     max_score = 0
     extra_lives = 0
+    extra_jumps = 0
     lives_image = pygame.transform.scale(pygame.image.load('lives.png'), (WIDTH*0.05, WIDTH*0.05))
+    jumps_image = pygame.transform.scale(pygame.image.load('jump.png'), (WIDTH*0.05, WIDTH*0.05))
     coin = pygame.transform.scale(pygame.image.load('coin.png'), (WIDTH*0.05, WIDTH*0.05))
     pause_image = pygame.transform.scale(pygame.image.load('pause.png'), (WIDTH*0.05, WIDTH*0.05))
 
@@ -547,12 +572,30 @@ def game_loop():
         if (keys[K_LEFT] or keys[K_a]) and player_rect.left > 0:
             player_rect = player_rect.move(player_move_left)
         
-        if keys[K_p]:
+        if keys[K_p] and ticks_to_ignore_pause == 0:
             paused = True
             pause()
         
-        if keys[K_ESCAPE]:
+        if keys[K_ESCAPE] and ticks_to_ignore_pause == 0:
             game_exit()
+
+        if keys[K_SPACE] and ticks_to_ignore == 0:
+            if jumps > 0:
+                pygame.time.set_timer(CHANGE_IMAGE, 40)
+                ticks_to_ignore = 15
+                if player_rect[1] - round(HEIGHT/(jump + 4)) < 0:
+                    player_rect[1] = 0
+                else:
+                    player_rect = player_rect.move([0, -round(HEIGHT/(jump + 4))])
+                jumps -= 1
+
+        if ticks_to_ignore > 0:
+            if ticks_to_ignore == 1:
+                pygame.time.set_timer(CHANGE_IMAGE, 200)
+            ticks_to_ignore -= 1
+
+        if ticks_to_ignore_pause > 0:
+            ticks_to_ignore_pause -= 1       
 
         for enemy in enemies:
             enemy[1] = enemy[1].move(enemy[2])
@@ -574,11 +617,16 @@ def game_loop():
                 pygame.mixer.Sound.play(coin_sound)
                 score += bonus[3]
                 score_lives += bonus[3]
+                score_jumps += bonus[3]
                 bonus_collected += 1
                 if score_lives >= score_for_lives:
                     lives += 1
                     score_lives += -score_for_lives
                     extra_lives += 1
+                if score_jumps >= score_for_jumps:
+                    jumps += 1
+                    score_jumps += -score_for_jumps
+                    extra_jumps += 1
                 bonuses.pop(bonuses.index(bonus))
 
         main_display.blit(coin, (round(WIDTH*(0.895-0.065)), round(HEIGHT*0.025)))
@@ -607,6 +655,8 @@ def game_loop():
             case _:
                 main_display.blit(lives_image, (round(WIDTH*0.042), round(HEIGHT*0.025)))
                 main_display.blit(FONT.render("X " + str(lives), True, COLOR_BLACK), (round(WIDTH*(0.042+0.065)), round(HEIGHT*0.03)))
+        main_display.blit(jumps_image, (round(WIDTH*(0.895-0.065)), round(HEIGHT*0.895)))
+        main_display.blit(FONT.render("X " + str(jumps), True, COLOR_BLACK), (round(WIDTH*0.895), round(HEIGHT*0.9)))
         main_display.blit(pause_image,(round(WIDTH*(0.5-0.05/2)), round(HEIGHT*0.025)))
         main_display.blit(FONT.render("Рівень: " + str(level), True, COLOR_BLACK), (round(WIDTH*(0.042)), round(HEIGHT*0.9)))
         main_display.blit(player, player_rect)
