@@ -7,7 +7,7 @@ import time
 import math
 
 import pygame
-from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_p, K_ESCAPE
+from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_ESCAPE
 
 pygame.init()
 
@@ -175,7 +175,7 @@ def button(text : str, position : str, action = None):
     main_display.blit(textSurf, textRect)  
 
 def statistics():
-    global score, difficulty, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives
+    global score, difficulty, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives, rage_count, rage_used_count
 
     stat = True
 
@@ -195,11 +195,13 @@ def statistics():
     text_line_display('Максимально можливі бали: ' + str(max_score), 0.3)
     text_line_display('Ефективність: ' + str(round(score/max_score*100, 2)) + '%', 0.35)
     text_line_display('Додаткових життів: ' + str(extra_lives), 0.4)
-    text_line_display('Всього ракет: ' + str(enemy_count), 0.45)
-    text_line_display('Зіткнень з ракетами: ' + str(enemy_collisions), 0.5)
-    text_line_display('Всього вантажів: ' + str(bonus_count), 0.55)
-    text_line_display('Підібрано вантажів: ' + str(bonus_collected), 0.6)
-    text_line_display('Ефективність: ' + str(round(bonus_collected/bonus_count*100, 2)) + '%', 0.65)
+    text_line_display('Всього ракет: ' + str(enemy_count) + '          Зіткнень з ракетами: ' + str(enemy_collisions), 0.45)
+    # text_line_display('Зіткнень з ракетами: ' + str(enemy_collisions), 0.5)
+    text_line_display('Всього вантажів: ' + str(bonus_count) + '          Підібрано вантажів: ' + str(bonus_collected), 0.5)
+    # text_line_display('Підібрано вантажів: ' + str(bonus_collected), 0.6)
+    text_line_display('Ефективність: ' + str(round(bonus_collected/bonus_count*100, 2)) + '%', 0.55)
+    text_line_display('Всього прискорювачів: ' + str(rage_count) + '          Активовано прискорювачів: ' + str(rage_used_count), 0.6)
+    text_line_display('Ефективність: ' + str(round(rage_used_count/rage_count*100, 2)) + '%', 0.65)
 
     while stat:
         for event in pygame.event.get():
@@ -332,7 +334,7 @@ def controls():
 
     time.sleep(0.25)
 
-    text_line_display('підбирайте вантажі та уникайте ракет', 0.1)
+    text_line_display('підбирайте вантажі, активуйте прискорення та уникайте ракет', 0.1)
     text_line_display('100* балів = додаткове життя, *кожні 5 рівнів зростає на 50', 0.15)
     text_line_display('кожну хвилину новий рівень', 0.2)
     text_line_display('кожен рівень прискорюються ракети, кожних 2 - вантажі', 0.25)
@@ -342,7 +344,7 @@ def controls():
     text_line_display('стрілка вниз або S - рухати гусака донизу', 0.45)
     text_line_display('стрілка ліворуч або A - рухати гусака ліворуч', 0.5)
     text_line_display('стрілка праворуч або D - рухати гусака праворуч', 0.55)
-    text_line_display('P - пауза', 0.6)
+    text_line_display('P - пауза          Пробіл - ривок угору', 0.6)
     text_line_display('Esc - назад/вихід', 0.65)
 
     while control:
