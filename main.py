@@ -7,7 +7,7 @@ import time
 import math
 
 import pygame
-from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_p, K_ESCAPE, K_SPACE
+from pygame.constants import QUIT, K_DOWN, K_UP, K_LEFT, K_RIGHT, K_w, K_a, K_s, K_d, K_p, K_ESCAPE
 
 pygame.init()
 
@@ -34,8 +34,6 @@ bg_move = 3
 score = 0
 level = 1
 lives = 3
-ticks_to_ignore = 0
-ticks_to_ignore_pause = 0
 jumps : int
 enemy_count : int
 enemy_collisions : int
@@ -44,6 +42,8 @@ bonus_collected : int
 max_score : int
 extra_lives : int
 extra_jumps : int
+rage_count : int
+rage_used_count : int
 
 paused = False
 game_end = False
@@ -58,10 +58,31 @@ crash_sound = pygame.mixer.Sound('explosion.wav')
 pygame.mixer.Sound.set_volume(crash_sound, 0.25)
 coin_sound = pygame.mixer.Sound('coin.wav')
 pygame.mixer.Sound.set_volume(crash_sound, 0.75)
+rage_sound = pygame.mixer.Sound('rage.wav')
+pygame.mixer.Sound.set_volume(rage_sound, 1)
 
 def game_exit():
     pygame.quit()
     quit()
+
+def create_rage():
+    global level, rage_count, difficulty
+    rage = pygame.transform.scale(pygame.image.load('rage.png'), (WIDTH*0.05, WIDTH*0.05))
+    rage_size = rage.get_size()
+    rage_rect = pygame.Rect(random.randint(round(WIDTH*0.25), round(WIDTH*0.85)), random.randint(0, (HEIGHT - rage_size[1])), *rage_size)
+    rage_count += 1
+    match difficulty:
+        case 'easy':
+            rage_duration = random.randint(12500, 15000)
+            rage_screen_time = random.randint(10500, 12000)
+        case 'normal':
+            rage_duration = random.randint(10000, 12500)
+            rage_screen_time = random.randint(9000, 10500)
+        case 'hard':
+            rage_duration = random.randint(7500, 10000)
+            rage_screen_time = random.randint(7500, 9000)
+    return [rage, rage_rect, rage_duration, rage_screen_time]
+
 
 def create_enemy():
     global level, bg_move, enemy_count
@@ -405,15 +426,12 @@ def game_intro():
         pygame.display.update()
 
 def unpause():
-    global paused, ticks_to_ignore_pause
+    global paused
     pygame.mixer.music.unpause()
-    ticks_to_ignore_pause = 75
     paused = False
 
 def pause():
     global paused, score, lives, difficulty
-
-    ticks_to_ignore_p = 300
     
     pygame.mixer.music.pause()
 
@@ -439,18 +457,15 @@ def pause():
         button('Нова гра!', 'center', choose_difficulty)
         button('Вийти :(', 'right', game_exit)
 
-        keys = pygame.key.get_pressed()
-
-        if keys[K_ESCAPE] or (keys[K_p] and ticks_to_ignore_p == 0):
-            unpause()
-
-        if ticks_to_ignore_p > 0:
-            ticks_to_ignore_p -= 1
+        for event in pygame.event.get():
+            if event.type == pygame.KEYUP:
+                if pygame.key.name(event.key) == 'escape' or 'p':
+                    unpause()
              
         pygame.display.update()
 
 def game_loop():
-    global paused, bg_move, score, level, difficulty, lives, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives, ticks_to_ignore, jumps, extra_jumps, ticks_to_ignore_pause
+    global paused, bg_move, score, level, difficulty, lives, enemy_count, enemy_collisions, bonus_count, bonus_collected, max_score, extra_lives, jumps, extra_jumps, rage_count, rage_used_count
 
     pygame.mixer.music.load('Village of fools soundtrack.wav')
     pygame.mixer.music.play(-1)
@@ -494,6 +509,7 @@ def game_loop():
 
     enemies = []
     bonuses = []
+    rages = []
 
     score = 0
     lives = 3
@@ -509,6 +525,13 @@ def game_loop():
     max_score = 0
     extra_lives = 0
     extra_jumps = 0
+    animation_boost = 0
+    rage_q = 1
+    rage_count = 0
+    rage_used_count = 0
+    rage_duration = 0
+    time_elapsed = 0
+    rage_appearance_time = 0
     lives_image = pygame.transform.scale(pygame.image.load('lives.png'), (WIDTH*0.05, WIDTH*0.05))
     jumps_image = pygame.transform.scale(pygame.image.load('jump.png'), (WIDTH*0.05, WIDTH*0.05))
     coin = pygame.transform.scale(pygame.image.load('coin.png'), (WIDTH*0.05, WIDTH*0.05))
@@ -536,13 +559,32 @@ def game_loop():
                     image_index = 0
             if event.type == CHANGE_LEVEL:
                 level += 1
+                rages.append(create_rage())
+                rage_appearance_time = pygame.time.get_ticks()
+            if event.type == pygame.KEYUP:
+                # keyup = pygame.key.name(event.key)
+                # print (keyup, "Key is released")
+                if pygame.key.name(event.key) == 'space':
+                    if jumps > 0:
+                        pygame.time.set_timer(CHANGE_IMAGE, 40)
+                        animation_boost = 15
+                        if player_rect[1] - round(HEIGHT/(jump + 4)) < 0:
+                            player_rect[1] = 0
+                        else:
+                            player_rect = player_rect.move([0, -round(HEIGHT/(jump + 4))])
+                        jumps -= 1
+                if pygame.key.name(event.key) == 'escape':
+                    game_exit()
+                if pygame.key.name(event.key) == 'p':
+                    paused = True
+                    pause()
 
         # main_display.fill(COLOR_BLACK)
 
-        player_move_down = [0, 1+bg_move+math.floor(level/3)]
-        player_move_up = [0, -1-bg_move-math.floor(level/3)]
-        player_move_right = [1+bg_move+math.floor(level/3), 0]
-        player_move_left = [-1-bg_move-math.floor(level/3), 0]
+        player_move_down = [0, (1.5+bg_move+math.floor(level/3))*rage_q]
+        player_move_up = [0, (-0.5-bg_move-math.floor(level/3))*rage_q]
+        player_move_right = [(1+bg_move+math.floor(level/3))*rage_q, 0]
+        player_move_left = [(-1-bg_move-math.floor(level/3))*rage_q, 0]
 
         score_for_lives = 100 + 50 * math.floor(level/5)
 
@@ -571,31 +613,11 @@ def game_loop():
 
         if (keys[K_LEFT] or keys[K_a]) and player_rect.left > 0:
             player_rect = player_rect.move(player_move_left)
-        
-        if keys[K_p] and ticks_to_ignore_pause == 0:
-            paused = True
-            pause()
-        
-        if keys[K_ESCAPE] and ticks_to_ignore_pause == 0:
-            game_exit()
 
-        if keys[K_SPACE] and ticks_to_ignore == 0:
-            if jumps > 0:
-                pygame.time.set_timer(CHANGE_IMAGE, 40)
-                ticks_to_ignore = 15
-                if player_rect[1] - round(HEIGHT/(jump + 4)) < 0:
-                    player_rect[1] = 0
-                else:
-                    player_rect = player_rect.move([0, -round(HEIGHT/(jump + 4))])
-                jumps -= 1
-
-        if ticks_to_ignore > 0:
-            if ticks_to_ignore == 1:
+        if animation_boost > 0:
+            if animation_boost == 1:
                 pygame.time.set_timer(CHANGE_IMAGE, 200)
-            ticks_to_ignore -= 1
-
-        if ticks_to_ignore_pause > 0:
-            ticks_to_ignore_pause -= 1       
+            animation_boost -= 1
 
         for enemy in enemies:
             enemy[1] = enemy[1].move(enemy[2])
@@ -603,7 +625,7 @@ def game_loop():
 
             if player_rect.colliderect(enemy[1]):
                 pygame.mixer.Sound.play(crash_sound)
-                lives += -1
+                lives -= 1
                 enemy_collisions += 1
                 if lives <= 0:
                     game_over()
@@ -628,6 +650,26 @@ def game_loop():
                     score_jumps += -score_for_jumps
                     extra_jumps += 1
                 bonuses.pop(bonuses.index(bonus))
+
+        for rage in rages:
+            main_display.blit(rage[0], rage[1])
+            rage_screen_time = rage[3]
+
+            if pygame.time.get_ticks() > rage_appearance_time + rage_screen_time:
+                rage_screen_time = 0
+                rages.pop(rages.index(rage))
+
+            if player_rect.colliderect(rage[1]):
+                pygame.mixer.Sound.play(rage_sound)
+                time_elapsed = pygame.time.get_ticks()
+                rage_duration = rage[2]
+                rage_q = 1.5
+                rage_used_count += 1
+                rages.pop(rages.index(rage))
+
+        if pygame.time.get_ticks() > time_elapsed + rage_duration:
+            rage_duration = 0
+            rage_q = 1
 
         main_display.blit(coin, (round(WIDTH*(0.895-0.065)), round(HEIGHT*0.025)))
         main_display.blit(FONT.render(str(score), True, COLOR_BLACK), (round(WIDTH*0.895), round(HEIGHT*0.03)))
